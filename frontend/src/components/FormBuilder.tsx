@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -18,15 +18,29 @@ type Field = {
   format?: "email" | "number" | null;
 };
 
+type AnswerType = {
+  label: string;
+  value: string;
+};
+
+type ResponseType = {
+  _id: string;
+  formId: string;
+  answers: AnswerType[];
+  submittedAt: string;
+};
+
+
 export default function FormBuilder() {
   const [fields, setFields] = useState<Field[]>([]);
   const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [recent, setRecent] = useState<ResponseType[]>([]);
 
   const addField = (type: FieldType) => {
     setFields([
       ...fields,
       {
-        id: Date.now().toString(),
+        id: Date.now().toString() + "-" + type,
         type,
         label: `${type} field`,
         required: false,
@@ -46,6 +60,26 @@ export default function FormBuilder() {
   const handleInputChange = (id: string, value: string) => {
     setAnswers({ ...answers, [id]: value });
   };
+
+  const fetchRecent = async () => {
+    try {
+      const res = await axios.get("http://localhost:5000/forms/responses");
+      // access the `data` array inside the response
+      if (Array.isArray(res.data.data)) {
+        setRecent(res.data.data);
+      } else {
+        setRecent([]);
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to fetch recent responses");
+      setRecent([]);
+    }
+  };
+
+  useEffect(() => {
+    fetchRecent();
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -70,17 +104,19 @@ export default function FormBuilder() {
     // build submission object
     const payload = {
       formId: "FORM-" + Date.now(), // or store schema._id if from DB
-      answers,
+      answers: fields.map((f) => ({
+        label: f.label,
+        value: answers[f.id] || "",
+      })),
       submittedAt: new Date().toISOString(),
     };
 
     try {
-      // call backend API
-      console.log("Submitting payload:", payload);
-      await axios.post("http://localhost:5000/api/forms/submit", payload);
+      await axios.post("http://localhost:5000/forms/submit", payload);
       toast.success("Form submitted & saved to DB!");
-    
       setAnswers({});
+      fetchRecent(); // refresh after submit ✅
+      setFields([]); // Clear the form fields after submission
     } catch (err) {
       console.error(err);
       toast.error("Failed to save form response");
@@ -278,9 +314,38 @@ export default function FormBuilder() {
       {/* Right: JSON Schema */}
       <div className="space-y-4 col-span-1">
         <h2 className="text-xl font-bold">JSON Schema</h2>
-        <pre className="bg-gray-100 p-4 rounded text-sm overflow-auto max-h-[500px]">
+        <pre className="bg-gray-100 p-4 rounded text-sm overflow-auto max-h-[300px]">
           {JSON.stringify(schema, null, 2)}
         </pre>
+
+        <h2 className="text-xl font-bold">Recent Responses</h2>
+        <div className="space-y-2 max-h-[300px] overflow-auto bg-gray-50 p-2 rounded">
+          {recent.map((r) => (
+            <div key={r._id} className="border rounded p-2 text-sm bg-white">
+              <p className="font-semibold">Form: {r.formId}</p>
+              <p className="text-xs text-gray-500">
+                {new Date(r.submittedAt).toLocaleString()}
+              </p>
+              <div className="text-xs bg-gray-100 p-2 rounded space-y-1">
+                <div className="text-xs bg-gray-100 p-2 rounded space-y-1">
+                  {Array.isArray(r.answers) && r.answers.length > 0 ? (
+                    r.answers.map((a, idx) => (
+                      <p key={idx}>
+                        <span className="font-medium">{a.label}: </span>
+                        <span>{a.value}</span>
+                      </p>
+                    ))
+                  ) : (
+                    <p className="text-gray-500 text-sm">No answers</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+          {recent.length === 0 && (
+            <p className="text-gray-500 text-sm">No responses yet</p>
+          )}
+        </div>
       </div>
     </div>
   );
