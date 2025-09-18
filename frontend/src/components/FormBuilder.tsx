@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -71,15 +71,29 @@ export default function FormBuilder() {
         return;
       }
     }
-    console.log("Form submitted:", answers);
 
     toast.success("Form submitted successfully!");
   };
 
+  // 🟢 Generate JSON Schema live
+  const schema = useMemo(() => {
+    return {
+      title: "Generated Form Schema",
+      fields: fields.map((f) => ({
+        id: f.id,
+        label: f.label,
+        type: f.type,
+        required: f.required || false,
+        format: f.format || undefined,
+        options: f.type === "dropdown" ? f.options || [] : undefined,
+      })),
+    };
+  }, [fields]);
+
   return (
-    <div className="p-6 grid grid-cols-2 gap-6">
+    <div className="p-6 grid grid-cols-3 gap-6">
       {/* Left: Form Builder Controls */}
-      <div className="space-y-4">
+      <div className="space-y-4 col-span-1">
         <h2 className="text-xl font-bold">Form Builder</h2>
 
         <div className="flex gap-2 flex-wrap">
@@ -195,8 +209,8 @@ export default function FormBuilder() {
         </div>
       </div>
 
-      {/* Right: Live Preview */}
-      <div className="space-y-4">
+      {/* Middle: Live Preview */}
+      <div className="space-y-4 col-span-1">
         <h2 className="text-xl font-bold">Preview</h2>
         <form className="space-y-4" onSubmit={handleSubmit}>
           {fields.map((f) => (
@@ -246,6 +260,14 @@ export default function FormBuilder() {
             </Button>
           )}
         </form>
+      </div>
+
+      {/* Right: JSON Schema View */}
+      <div className="space-y-4 col-span-1">
+        <h2 className="text-xl font-bold">JSON Schema</h2>
+        <pre className="bg-gray-100 p-4 rounded text-sm overflow-auto max-h-[500px]">
+          {JSON.stringify(schema, null, 2)}
+        </pre>
       </div>
     </div>
   );
