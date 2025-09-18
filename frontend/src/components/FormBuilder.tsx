@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
+import axios from "axios";
 
 type FieldType = "text" | "textarea" | "date" | "dropdown";
 
@@ -21,7 +22,6 @@ export default function FormBuilder() {
   const [fields, setFields] = useState<Field[]>([]);
   const [answers, setAnswers] = useState<Record<string, string>>({});
 
-  // Add new field
   const addField = (type: FieldType) => {
     setFields([
       ...fields,
@@ -35,24 +35,21 @@ export default function FormBuilder() {
     ]);
   };
 
-  // Update field
   const updateField = (id: string, updates: Partial<Field>) => {
     setFields(fields.map((f) => (f.id === id ? { ...f, ...updates } : f)));
   };
 
-  // Remove field
   const removeField = (id: string) => {
     setFields(fields.filter((f) => f.id !== id));
   };
 
-  // Handle preview form input change
   const handleInputChange = (id: string, value: string) => {
     setAnswers({ ...answers, [id]: value });
   };
 
-  // Validate and submit
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    // validation first
     for (const f of fields) {
       const value = answers[f.id] || "";
 
@@ -60,22 +57,37 @@ export default function FormBuilder() {
         toast.error(`${f.label} is required`);
         return;
       }
-
       if (f.format === "email" && value && !/^\S+@\S+\.\S+$/.test(value)) {
         toast.error(`${f.label} must be a valid email`);
         return;
       }
-
       if (f.format === "number" && value && isNaN(Number(value))) {
         toast.error(`${f.label} must be a number`);
         return;
       }
     }
 
-    toast.success("Form submitted successfully!");
+    // build submission object
+    const payload = {
+      formId: "FORM-" + Date.now(), // or store schema._id if from DB
+      answers,
+      submittedAt: new Date().toISOString(),
+    };
+
+    try {
+      // call backend API
+      console.log("Submitting payload:", payload);
+      await axios.post("http://localhost:5000/api/forms/submit", payload);
+      toast.success("Form submitted & saved to DB!");
+    
+      setAnswers({});
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to save form response");
+    }
   };
 
-  // 🟢 Generate JSON Schema live
+  // 🟢 JSON schema
   const schema = useMemo(() => {
     return {
       title: "Generated Form Schema",
@@ -89,6 +101,7 @@ export default function FormBuilder() {
       })),
     };
   }, [fields]);
+
 
   return (
     <div className="p-6 grid grid-cols-3 gap-6">
@@ -209,7 +222,7 @@ export default function FormBuilder() {
         </div>
       </div>
 
-      {/* Middle: Live Preview */}
+      {/* Middle: Preview */}
       <div className="space-y-4 col-span-1">
         <h2 className="text-xl font-bold">Preview</h2>
         <form className="space-y-4" onSubmit={handleSubmit}>
@@ -262,7 +275,7 @@ export default function FormBuilder() {
         </form>
       </div>
 
-      {/* Right: JSON Schema View */}
+      {/* Right: JSON Schema */}
       <div className="space-y-4 col-span-1">
         <h2 className="text-xl font-bold">JSON Schema</h2>
         <pre className="bg-gray-100 p-4 rounded text-sm overflow-auto max-h-[500px]">
