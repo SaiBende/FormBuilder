@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { toast } from "sonner";
 
 type FieldType = "text" | "textarea" | "date" | "dropdown";
 
@@ -9,18 +10,28 @@ type Field = {
   id: string;
   type: FieldType;
   label: string;
-  options?: string[]; // only for dropdown
-  _newOption?: string; // temporary input state for dropdown
+  options?: string[];
+  _newOption?: string;
+
+  required?: boolean;
+  format?: "email" | "number" | null;
 };
 
 export default function FormBuilder() {
   const [fields, setFields] = useState<Field[]>([]);
+  const [answers, setAnswers] = useState<Record<string, string>>({});
 
   // Add new field
   const addField = (type: FieldType) => {
     setFields([
       ...fields,
-      { id: Date.now().toString(), type, label: `${type} field` },
+      {
+        id: Date.now().toString(),
+        type,
+        label: `${type} field`,
+        required: false,
+        format: null,
+      },
     ]);
   };
 
@@ -34,13 +45,43 @@ export default function FormBuilder() {
     setFields(fields.filter((f) => f.id !== id));
   };
 
+  // Handle preview form input change
+  const handleInputChange = (id: string, value: string) => {
+    setAnswers({ ...answers, [id]: value });
+  };
+
+  // Validate and submit
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    for (const f of fields) {
+      const value = answers[f.id] || "";
+
+      if (f.required && !value.trim()) {
+        toast.error(`${f.label} is required`);
+        return;
+      }
+
+      if (f.format === "email" && value && !/^\S+@\S+\.\S+$/.test(value)) {
+        toast.error(`${f.label} must be a valid email`);
+        return;
+      }
+
+      if (f.format === "number" && value && isNaN(Number(value))) {
+        toast.error(`${f.label} must be a number`);
+        return;
+      }
+    }
+    console.log("Form submitted:", answers);
+
+    toast.success("Form submitted successfully!");
+  };
+
   return (
     <div className="p-6 grid grid-cols-2 gap-6">
       {/* Left: Form Builder Controls */}
       <div className="space-y-4">
         <h2 className="text-xl font-bold">Form Builder</h2>
 
-        {/* Add field buttons */}
         <div className="flex gap-2 flex-wrap">
           <Button onClick={() => addField("text")}>+ Text</Button>
           <Button onClick={() => addField("textarea")}>+ Textarea</Button>
@@ -48,7 +89,6 @@ export default function FormBuilder() {
           <Button onClick={() => addField("dropdown")}>+ Dropdown</Button>
         </div>
 
-        {/* List of added fields */}
         <div className="space-y-4 mt-4">
           {fields.map((f) => (
             <div key={f.id} className="p-4 border rounded-lg space-y-2">
@@ -58,10 +98,41 @@ export default function FormBuilder() {
                 onChange={(e) => updateField(f.id, { label: e.target.value })}
               />
 
+              {/* Validation controls */}
+              <div className="flex gap-4 items-center">
+                <label className="flex items-center gap-1">
+                  <input
+                    type="checkbox"
+                    checked={f.required}
+                    onChange={(e) =>
+                      updateField(f.id, { required: e.target.checked })
+                    }
+                  />
+                  Required
+                </label>
+
+                {(f.type === "text" || f.type === "textarea") && (
+                  <select
+                    className="border p-1 rounded"
+                    value={f.format ?? ""}
+                    onChange={(e) =>
+                      updateField(f.id, {
+                        format: e.target.value
+                          ? (e.target.value as "email" | "number")
+                          : null,
+                      })
+                    }
+                  >
+                    <option value="">No format</option>
+                    <option value="email">Email</option>
+                    <option value="number">Number</option>
+                  </select>
+                )}
+              </div>
+
               {/* Dropdown options editor */}
               {f.type === "dropdown" && (
                 <div className="space-y-2">
-                  {/* Add option input */}
                   <div className="flex gap-2">
                     <Input
                       placeholder="New option"
@@ -85,7 +156,6 @@ export default function FormBuilder() {
                     </Button>
                   </div>
 
-                  {/* Show current options */}
                   <div className="space-y-1">
                     {(f.options || []).map((opt, idx) => (
                       <div
@@ -113,7 +183,6 @@ export default function FormBuilder() {
                 </div>
               )}
 
-              {/* Remove field button */}
               <Button
                 variant="destructive"
                 size="sm"
@@ -129,17 +198,40 @@ export default function FormBuilder() {
       {/* Right: Live Preview */}
       <div className="space-y-4">
         <h2 className="text-xl font-bold">Preview</h2>
-        <form className="space-y-4">
+        <form className="space-y-4" onSubmit={handleSubmit}>
           {fields.map((f) => (
             <div key={f.id} className="space-y-1">
-              <label className="block font-medium">{f.label}</label>
-              {f.type === "text" && <Input placeholder="Enter text" />}
-              {f.type === "textarea" && (
-                <Textarea placeholder="Enter long text..." />
+              <label className="block font-medium">
+                {f.label} {f.required && <span className="text-red-500">*</span>}
+              </label>
+              {f.type === "text" && (
+                <Input
+                  placeholder="Enter text"
+                  value={answers[f.id] || ""}
+                  onChange={(e) => handleInputChange(f.id, e.target.value)}
+                />
               )}
-              {f.type === "date" && <Input type="date" />}
+              {f.type === "textarea" && (
+                <Textarea
+                  placeholder="Enter long text..."
+                  value={answers[f.id] || ""}
+                  onChange={(e) => handleInputChange(f.id, e.target.value)}
+                />
+              )}
+              {f.type === "date" && (
+                <Input
+                  type="date"
+                  value={answers[f.id] || ""}
+                  onChange={(e) => handleInputChange(f.id, e.target.value)}
+                />
+              )}
               {f.type === "dropdown" && (
-                <select className="border p-2 rounded w-full">
+                <select
+                  className="border p-2 rounded w-full"
+                  value={answers[f.id] || ""}
+                  onChange={(e) => handleInputChange(f.id, e.target.value)}
+                >
+                  <option value="">Select...</option>
                   {(f.options || []).map((opt, idx) => (
                     <option key={idx}>{opt}</option>
                   ))}
@@ -147,6 +239,12 @@ export default function FormBuilder() {
               )}
             </div>
           ))}
+
+          {fields.length > 0 && (
+            <Button type="submit" className="mt-4">
+              Submit Form
+            </Button>
+          )}
         </form>
       </div>
     </div>
