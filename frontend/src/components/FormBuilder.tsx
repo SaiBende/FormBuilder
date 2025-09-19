@@ -13,7 +13,6 @@ type Field = {
   label: string;
   options?: string[];
   _newOption?: string;
-
   required?: boolean;
   format?: "email" | "number" | null;
 };
@@ -30,11 +29,10 @@ type ResponseType = {
   submittedAt: string;
 };
 
-
 export default function FormBuilder() {
   const [fields, setFields] = useState<Field[]>([]);
-  const [answers, setAnswers] = useState<Record<string, string>>({});
   const [recent, setRecent] = useState<ResponseType[]>([]);
+  const [shareLink, setShareLink] = useState<string | null>(null);
 
   const addField = (type: FieldType) => {
     setFields([
@@ -57,14 +55,9 @@ export default function FormBuilder() {
     setFields(fields.filter((f) => f.id !== id));
   };
 
-  const handleInputChange = (id: string, value: string) => {
-    setAnswers({ ...answers, [id]: value });
-  };
-
   const fetchRecent = async () => {
     try {
       const res = await axios.get("http://localhost:5000/forms/responses");
-      // access the `data` array inside the response
       if (Array.isArray(res.data.data)) {
         setRecent(res.data.data);
       } else {
@@ -81,49 +74,29 @@ export default function FormBuilder() {
     fetchRecent();
   }, []);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    // validation first
-    for (const f of fields) {
-      const value = answers[f.id] || "";
-
-      if (f.required && !value.trim()) {
-        toast.error(`${f.label} is required`);
-        return;
-      }
-      if (f.format === "email" && value && !/^\S+@\S+\.\S+$/.test(value)) {
-        toast.error(`${f.label} must be a valid email`);
-        return;
-      }
-      if (f.format === "number" && value && isNaN(Number(value))) {
-        toast.error(`${f.label} must be a number`);
-        return;
-      }
+  // Save form → backend returns formId
+ const saveForm = async () => {
+  try {
+    const res = await axios.post("http://localhost:5000/forms/create", schema);
+    
+    // ✅ backend response structure has { success, data }
+    const formId = res.data?.data?._id;
+    if (!formId) {
+      toast.error("Form ID not found in response");
+      return;
     }
 
-    // build submission object
-    const payload = {
-      formId: "FORM-" + Date.now(), // or store schema._id if from DB
-      answers: fields.map((f) => ({
-        label: f.label,
-        value: answers[f.id] || "",
-      })),
-      submittedAt: new Date().toISOString(),
-    };
+    const link = `${window.location.origin}/forms/${formId}`;
+    setShareLink(link);
+    toast.success("Form saved successfully!");
+  } catch (err) {
+    console.error(err);
+    toast.error("Failed to save form");
+  }
+};
 
-    try {
-      await axios.post("http://localhost:5000/forms/submit", payload);
-      toast.success("Form submitted & saved to DB!");
-      setAnswers({});
-      fetchRecent(); // refresh after submit ✅
-      
-    } catch (err) {
-      console.error(err);
-      toast.error("Failed to save form response");
-    }
-  };
 
-  // 🟢 JSON schema
+  // 🟢 Schema for preview
   const schema = useMemo(() => {
     return {
       title: "Generated Form Schema",
@@ -137,7 +110,6 @@ export default function FormBuilder() {
       })),
     };
   }, [fields]);
-
 
   return (
     <div className="p-6 grid grid-cols-3 gap-6">
@@ -256,45 +228,48 @@ export default function FormBuilder() {
             </div>
           ))}
         </div>
+
+        {fields.length > 0 && (
+          <Button onClick={saveForm} className="mt-4">
+            Save Form
+          </Button>
+        )}
+
+        {shareLink && (
+          <div className="mt-4 p-2 bg-gray-100 rounded">
+            <p className="font-medium">Share this form:</p>
+            <a
+              href={shareLink}
+              target="_blank"
+              className="text-blue-600 underline"
+            >
+              {shareLink}
+            </a>
+          </div>
+        )}
       </div>
 
-      {/* Middle: Preview */}
+      {/* Middle: Preview (read-only) */}
       <div className="space-y-4 col-span-1">
         <h2 className="text-xl font-bold">Preview</h2>
-        <form className="space-y-4" onSubmit={handleSubmit}>
+        <form className="space-y-4 bg-white p-4 rounded border">
+          {fields.length === 0 && (
+            <p className="text-gray-500 italic">No fields yet...</p>
+          )}
+
           {fields.map((f) => (
             <div key={f.id} className="space-y-1">
               <label className="block font-medium">
                 {f.label} {f.required && <span className="text-red-500">*</span>}
               </label>
-              {f.type === "text" && (
-                <Input
-                  placeholder="Enter text"
-                  value={answers[f.id] || ""}
-                  onChange={(e) => handleInputChange(f.id, e.target.value)}
-                />
-              )}
+              {f.type === "text" && <Input disabled placeholder="Text input" />}
               {f.type === "textarea" && (
-                <Textarea
-                  placeholder="Enter long text..."
-                  value={answers[f.id] || ""}
-                  onChange={(e) => handleInputChange(f.id, e.target.value)}
-                />
+                <Textarea disabled placeholder="Textarea input" />
               )}
-              {f.type === "date" && (
-                <Input
-                  type="date"
-                  value={answers[f.id] || ""}
-                  onChange={(e) => handleInputChange(f.id, e.target.value)}
-                />
-              )}
+              {f.type === "date" && <Input type="date" disabled />}
               {f.type === "dropdown" && (
-                <select
-                  className="border p-2 rounded w-full"
-                  value={answers[f.id] || ""}
-                  onChange={(e) => handleInputChange(f.id, e.target.value)}
-                >
-                  <option value="">Select...</option>
+                <select className="border p-2 rounded w-full" disabled>
+                  <option>Select...</option>
                   {(f.options || []).map((opt, idx) => (
                     <option key={idx}>{opt}</option>
                   ))}
@@ -302,16 +277,10 @@ export default function FormBuilder() {
               )}
             </div>
           ))}
-
-          {fields.length > 0 && (
-            <Button type="submit" className="mt-4">
-              Submit Form
-            </Button>
-          )}
         </form>
       </div>
 
-      {/* Right: JSON Schema */}
+      {/* Right: JSON Schema + Recent */}
       <div className="space-y-4 col-span-1">
         <h2 className="text-xl font-bold">JSON Schema</h2>
         <pre className="bg-gray-100 p-4 rounded text-sm overflow-auto max-h-[300px]">
@@ -327,18 +296,16 @@ export default function FormBuilder() {
                 {new Date(r.submittedAt).toLocaleString()}
               </p>
               <div className="text-xs bg-gray-100 p-2 rounded space-y-1">
-                <div className="text-xs bg-gray-100 p-2 rounded space-y-1">
-                  {Array.isArray(r.answers) && r.answers.length > 0 ? (
-                    r.answers.map((a, idx) => (
-                      <p key={idx}>
-                        <span className="font-medium">{a.label}: </span>
-                        <span>{a.value}</span>
-                      </p>
-                    ))
-                  ) : (
-                    <p className="text-gray-500 text-sm">No answers</p>
-                  )}
-                </div>
+                {Array.isArray(r.answers) && r.answers.length > 0 ? (
+                  r.answers.map((a, idx) => (
+                    <p key={idx}>
+                      <span className="font-medium">{a.label}: </span>
+                      <span>{a.value}</span>
+                    </p>
+                  ))
+                ) : (
+                  <p className="text-gray-500 text-sm">No answers</p>
+                )}
               </div>
             </div>
           ))}

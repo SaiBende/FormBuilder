@@ -22,7 +22,8 @@ export default function FormSummary() {
   const fetchResponses = async () => {
     try {
       const res = await axios.get("http://localhost:5000/forms/responses");
-      if (Array.isArray(res.data.data)) {
+      console.log(res.data);
+      if (res.data.success && Array.isArray(res.data.data)) {
         setResponses(res.data.data);
       } else {
         setResponses([]);
@@ -40,7 +41,7 @@ export default function FormSummary() {
     fetchResponses();
   }, []);
 
-  
+  // ✅ Stats
   const totalResponses = responses.length;
 
   const lastSubmitted = totalResponses
@@ -49,20 +50,17 @@ export default function FormSummary() {
       ).toLocaleString()
     : "N/A";
 
-  // Unique forms count
   const uniqueForms = useMemo(() => {
     const ids = new Set(responses.map((r) => r.formId));
     return ids.size;
   }, [responses]);
 
-  
-
   return (
     <div className="p-6 space-y-6">
-      <h1 className="text-2xl font-bold"> Form Summary</h1>
+      <h1 className="text-2xl font-bold">Form Summary</h1>
 
       {/* Stats Section */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
         <Card>
           <CardContent className="p-4">
             <p className="text-gray-500 text-sm">Total Responses</p>
@@ -77,9 +75,7 @@ export default function FormSummary() {
           </CardContent>
         </Card>
 
-      
-
-        <Card>
+        <Card className="sm:col-span-2">
           <CardContent className="p-4">
             <p className="text-gray-500 text-sm">Last Submitted At</p>
             <p className="text-md font-semibold">{lastSubmitted}</p>
@@ -96,7 +92,7 @@ export default function FormSummary() {
           <p className="text-gray-500">No responses yet</p>
         ) : (
           <div className="space-y-4 max-h-[400px] overflow-auto">
-            {responses.slice(0, 5).map((r) => (
+            {responses.map((r) => (
               <Card key={r._id}>
                 <CardContent className="p-4 space-y-2">
                   <div className="flex justify-between text-sm text-gray-600">
