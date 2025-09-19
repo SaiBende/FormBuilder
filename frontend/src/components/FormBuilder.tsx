@@ -116,7 +116,7 @@ export default function FormBuilder() {
       toast.success("Form submitted & saved to DB!");
       setAnswers({});
       fetchRecent(); // refresh after submit ✅
-      setFields([]); // Clear the form fields after submission
+      
     } catch (err) {
       console.error(err);
       toast.error("Failed to save form response");
